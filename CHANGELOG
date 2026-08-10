@@ -1,23 +1,4 @@
-v1.1 (client: v1.6)
-- Added `custom/` folder for you to save your files here. This folder will never be edited by any update.
-- Added `examples/` folder to show some server features.
-- Added `get_ini_value()`, `compare_usernames()` and `is_player_in_list()`.
-- Added `CHATBOT_USERNAMES` and `LOCALHOST` to `config.ini`.
-- Added `Server.chatbot_usernames` and `Server.localhost`.
-- Added `ChatBot` class. (Create chatbots using `Server.create_chatbot()`)
-- Added `Server.create_chatbot()`, `Player.move()` and `Player.change_status()`.
-- Added Git tutorial to the documentation.
-- Renamed `Server.send_chat()` to `Server.send_message()`.
-- Server now shows the server version and supported client version.
-- Fixed incorrect class printing.
-- Fixed `get_players_in_*()` functions returning JSON and not `Player` objects.
-- Fixed bugs related to username checking.
-- Fixed config.ini returning True for all booleans.
-- Fixed other minor issues.
-- Updated docs.
-
-- Added SSL chain support. Now you can add your SSL chain, if you need to!
-- Removed MySQL support, because it was probably not needed. Only SQLite is supported.
-- Removed `DB_TYPE` variable from `config.example.ini`.
-
-- Changed versioning from 1.x.x to 1.x (1.x.x will be used in very small updates such as bugfixes)
+v1.2 (client: v1.7)
+- Added more server attributes (`Server.password`, `Server.guests`, `Server.tcp_port`, `Server.ws_url`, `Server.private`).
+- Added more configuration variables (`[Server] SERVER_PASSWORD`, `[Server] GUESTS`, `[Server] TCP_PORT`, `[Server] WS_URL`, `[Server] PRIVATE`).
+- Updated `Server.initialze()`: added `tcp_server` parameter.

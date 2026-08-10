@@ -42,16 +42,14 @@ To install the server using Git (Windows):
 2. In the file explorer, type `cmd` in the path bar (next to the search bar) and press ENTER. This will open a terminal.
 3. Download (clone) the server using this command: `git clone https://github.com/glitchedlime/onlineclicker.git`.
 
-That's it! And if you want to update the server (this is the part where Git is very useful), just do the same steps with these commands:
-1. `git fetch origin`
-2. `git reset --hard origin/main`
+That's it! And if you want to update the server (this is the part where Git is very useful), just run `update_server_git.bat` or `update_server_git.sh`.
 
-### Manual download (not recommended)
+### Manual download (Not recommended)
 You can download the latest version of the server by going to the [GitHub page of OnlineClicker](https://github.com/glitchedlime/onlineclicker), clicking the green "Code" button and downloading the ZIP file.
 
 Don't forget to extract the ZIP file after downloading it!
 
-If you want to update the server, you have to manually download it and extract new files to your server.
+If you want to update the server, you have to manually download it again and extract new files to your server.
 
 ## Installing Python libraries
 Server scripts require certain Python libraries that are necessary for the server to function (e.g. communication with players).

@@ -47,6 +47,8 @@ The server stores certain data in certain places. Here is the documented server 
 - `start.sh` - This file runs the server on Linux.
 - `start_docs.bat` - This file creates a documentation website on localhost on Windows.
 - `start_docs.sh` - This file creates a documentation website on localhost on Linux.
+- `update_server_git.bat` - This file updates your server with the latest version on Windows.
+- `update_server_git.sh` - This file updates your server with the latest version on Linux.
 - `.gitignore` - This file lists all the places in the project that shouldn't be uploaded on GitHub. This isn't important to you.
 
 ## Quick example
