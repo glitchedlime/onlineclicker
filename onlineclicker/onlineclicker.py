@@ -22,6 +22,8 @@ if "pdoc" not in modules:
     from .bot import bot
 
 from abc import ABC
+from flask import Flask, jsonify
+from flask_cors import CORS
 from jsonschema import validate
 from colorama import Fore, Back
 from dotenv import load_dotenv
@@ -33,6 +35,7 @@ import asyncio
 #import aiomysql
 import aiosqlite
 #import sqlglot
+import threading
 import websockets
 import datetime
 import no_profanity # this is actually my library; it works well but it's unfinished; I'll finish it someday for sure (adding more words and changing the detection system a lil bit) :)
@@ -92,10 +95,14 @@ def get_ini_value(section: str, variable: str, _type=None) -> Any | None:
 
 #_DB_TYPE = get_ini_value("Global", "DB_TYPE") if get_ini_value("Global", "DB_TYPE") != None else "SQLite3"
 _PLAYERS_COLUMN = "test_players" if _testing else "players" # don't mind this - testing purposes
-_CLIENT_VERSION = "1.6.1" # this is a mod client version
-_SERVER_VERSION = "1.1"
-_PORT = get_ini_value("Server", "PORT", int) if get_ini_value("Server", "PORT", int) != None else 24588
+_CLIENT_VERSION = "1.7" # this is a mod client version
+_SERVER_VERSION = "1.2"
+_PORT = get_ini_value("Server", "PORT", int) if get_ini_value("Server", "PORT", int) != None else 8765
+_TCP_PORT = get_ini_value("Server", "TCP_PORT", int) if get_ini_value("Server", "TCP_PORT", int) != None else 8888
+_WS_URL = get_ini_value("Server", "WS_URL")
 _SERVER_NAME = get_ini_value("Server", "SERVER_NAME") if get_ini_value("Server", "SERVER_NAME") != None else "OnlineClicker Server"
+_SERVER_PASSWORD = get_ini_value("Server", "SERVER_PASSWORD")
+_GUESTS = get_ini_value("Server", "GUESTS", bool) if get_ini_value("Server", "GUESTS", bool) != None else False
 _OWNERS = [(int(owner.strip()) if owner.strip().isnumeric() else owner.strip()) for owner in get_ini_value("Server", "OWNERS").split(',')] if get_ini_value("Server", "OWNERS") != None else []
 _MODERATORS = [(int(mod.strip()) if mod.strip().isnumeric() else mod.strip()) for mod in get_ini_value("Server", "MODERATORS").split(',')] if get_ini_value("Server", "MODERATORS") != None else []
 _SUPPORTERS = [(int(supporter.strip()) if supporter.strip().isnumeric() else supporter.strip()) for supporter in get_ini_value("Server", "SUPPORTERS").split(',')] if get_ini_value("Server", "SUPPORTERS") != None else []
@@ -104,10 +111,11 @@ _NODE_LIMIT = get_ini_value("Server", "MAX_IN_LOBBY", int)
 _MAX_PLAYERS = get_ini_value("Server", "MAX_PLAYERS", int)
 _LOG_MESSAGES = get_ini_value("Server", "LOG_MESSAGES", bool)
 _CHATBOT_USERNAMES = [chatbot.strip() for chatbot in get_ini_value("Global", "CHATBOT_USERNAMES").split(',')] if get_ini_value("Global", "CHATBOT_USERNAMES") != None else []
+_PRIVATE = get_ini_value("Server", "PRIVATE", bool) if get_ini_value("Server", "PRIVATE", bool) != None else True
 _LOCALHOST = get_ini_value("Server", "LOCALHOST", bool) if get_ini_value("Server", "LOCALHOST", bool) != None else False
 
 _profanity_filter = no_profanity.ProfanityFilter()
-_pool = None
+#_pool = None
 
 async def execDB(query: str, vars: tuple = None) -> list:
     """Executes an SQL query on DB. This function is a coroutine.
@@ -756,7 +764,11 @@ class Server(Base):
 
     def __init__(self,
                  name: str = _SERVER_NAME,
+                 password: str = _SERVER_PASSWORD,
+                 guests: bool = _GUESTS,
                  port: int = _PORT,
+                 tcp_port: int = _TCP_PORT,
+                 ws_url: str = _WS_URL,
                  node_limit: int = _NODE_LIMIT,
                  max_players: int = _MAX_PLAYERS,
                  log_messages: bool = _LOG_MESSAGES,
@@ -764,12 +776,17 @@ class Server(Base):
                  moderators: list[int | str] = _MODERATORS,
                  supporters: list[int | str] = _SUPPORTERS,
                  verified: list[int | str] = _VERIFIED,
+                 private: bool = _PRIVATE,
                  localhost: bool = _LOCALHOST
                  ):
         """
         Parameters:
             name (str): Server name.
+            password (str): Server password. (This is mostly useful only if you have a server that allows guests (players with no accounts).)
+            guests (bool): Whether the server should allow guests (players with no accounts).
             port (int): The port on which the server is running.
+            tcp_port (int): The port on which the TCP server is running. (This server is used to send server info to players.)
+            ws_url (str): WebSocket URL of the server for players to connect to. This must be set if your server is public.
             node_limit (int): The maximum number of players who can play on one node.
             max_players (int): The maximum number of players that can be connected to the server.
             log_messages (bool): Whether player messages should be logged to DB.
@@ -777,11 +794,16 @@ class Server(Base):
             moderators (list[int | str]): List of server moderators' identificators (Discord user ID or in-game username).
             supporters (list[int | str]): List of server supporters' identificators (Discord user ID or in-game username).
             verified (list[int | str]): List of server verified players' identificators (Discord user ID or in-game username).
+            private (bool): Whether the server should be private.
             localhost (bool): Whether the server should run on localhost.
         """
         
         self._name: str = name
+        self._password: str = password
+        self._guests: bool = guests
         self._port: int = port
+        self._tcp_port: int = tcp_port
+        self._ws_url: str = ws_url
         self._node_limit: int = node_limit
         self._max_players: int = max_players
         self._log_messages: bool = log_messages
@@ -789,6 +811,7 @@ class Server(Base):
         self._moderators: list[int | str] = moderators
         self._supporters: list[int | str] = supporters
         self._verified: list[int | str] = verified
+        self._private: bool = private
         self._localhost: bool = localhost
 
         self._all_players: dict[websockets.ServerConnection, Player] = {}
@@ -803,9 +826,25 @@ class Server(Base):
         """Server name."""
         return self._name
     @property
+    def password(self) -> str:
+        """Server password."""
+        return self._password
+    @property
+    def guests(self) -> bool:
+        """Whether the server should allow guests (players with no accounts)."""
+        return self._guests
+    @property
     def port(self) -> int:
         """The port on which the server is running."""
         return self._port
+    @property
+    def tcp_port(self) -> int:
+        """The port on which the TCP server is running. (This server is used to send server info to players.)"""
+        return self._tcp_port
+    @property
+    def ws_url(self) -> str:
+        """WebSocket URL of the server for players to connect to. This must be set if your server is public."""
+        return self._ws_url
     @property
     def node_limit(self) -> int:
         """The maximum number of players who can play on one node."""
@@ -846,6 +885,10 @@ class Server(Base):
     def chatbot_usernames(self) -> bool:
         """List of server chatbot usernames."""
         return self._chatbot_usernames
+    @property
+    def private(self) -> bool:
+        """Whether the server should be private."""
+        return self._private
     @property
     def localhost(self) -> bool:
         """Whether the server should run on localhost."""
@@ -1148,12 +1191,33 @@ class Server(Base):
                 keyfile=ssl_chain[1]
             )
 
-        async with websockets.serve(self.__handle_client, "localhost" if _testing or self.localhost else "0.0.0.0", self.port, ssl=ssl_context if ssl_chain != None else None):
-            await _call_registered_function(self.__registered_events, "on_server_ready")
-            if discord_bot:
-                await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
-            else:
-                await asyncio.Future()
+        flask_server = Flask(__name__)
+        CORS(flask_server)
+
+        def run_flask():
+            flask_server.run("0.0.0.0", self.tcp_port, use_reloader=False)
+
+        @flask_server.route("/fetch_info")
+        def fetch_info():
+            return jsonify({
+                "name": self.name,
+                "players": len(self.all_players),
+                "max_players": self.max_players,
+                "ws_url": self.ws_url,
+                "password_protected": self.password
+            })
+        
+        if not self.private:
+            flash_thread = threading.Thread(target=run_flask, daemon=True)
+            flash_thread.start()
+
+        ws_server = await websockets.serve(self.__handle_client, "localhost" if _testing or self.localhost else "0.0.0.0", self.port, ssl=ssl_context if ssl_chain != None else None)
+        await _call_registered_function(self.__registered_events, "on_server_ready")
+
+        if discord_bot:
+            await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
+
+        await ws_server.wait_closed()
 
     async def __handle_client(self, websocket):
         try:
