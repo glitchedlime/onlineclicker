@@ -1274,7 +1274,7 @@ class Server(Base):
         await _call_registered_function(self.__registered_events, "on_server_ready")
         await _call_registered_function(self.__registered_events, "on_ws_server_ready")
 
-        if discord_bot:
+        if discord_bot and os.getenv("DISCORD_BOT_TOKEN") != "":
             await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
 
         await ws_server.wait_closed()
