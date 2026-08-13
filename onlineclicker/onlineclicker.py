@@ -1289,7 +1289,7 @@ class Server(Base):
 
                 if "request" not in json_req:
                     await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.MISSING_REQ_VALUE}))
-                    await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.MISSING_REQ_VALUE, False)
+                    await _call_registered_function(self.__registered_events, "on_client_error", websocket, json_req, ClientErrorMessage.MISSING_REQ_VALUE, False)
 
                 elif websocket not in self.all_players:
                     # Join to a free node after logging in (or send server password auth)
@@ -1301,7 +1301,7 @@ class Server(Base):
                     
                     if not self.guests and not json_req["request"] == "login":
                         await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD}))
-                        await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD, True)
+                        await _call_registered_function(self.__registered_events, "on_client_error", websocket, json_req, ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD, True)
                         return
                     
                     else:
@@ -1310,7 +1310,7 @@ class Server(Base):
 
                         if not (json_req["username"].replace(".", "").replace("-", "").replace("_", "").isalnum() and json_req["username"].lower() not in [x.lower() for x in self.chatbot_usernames]):
                             await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.INVALID_USERNAME}))
-                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.INVALID_USERNAME, True)
+                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, json_req, ClientErrorMessage.INVALID_USERNAME, True)
                             return
 
                         register_user = True
@@ -1321,7 +1321,7 @@ class Server(Base):
 
                         if json_req["version"] != _CLIENT_VERSION:
                             await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.OUTDATED_CLIENT}))
-                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.OUTDATED_CLIENT, True)
+                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, json_req, ClientErrorMessage.OUTDATED_CLIENT, True)
                             return
                         
                         elif self.guests:
@@ -1329,7 +1329,7 @@ class Server(Base):
                         
                         elif websocket not in _server_auth_queue and not (len(values) != 0 and _check_hash(json_req["password"], values[0][0].encode("utf-8"))):
                             await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD}))
-                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD, True)
+                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, json_req, ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD, True)
                             return
                         
                         if self.password and websocket not in _server_auth_queue:
@@ -1341,7 +1341,7 @@ class Server(Base):
                         elif self.password and websocket in _server_auth_queue:
                             if not ("server_pass" in json_req and json_req["server_pass"] == self.password):
                                 await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.UNAUTHORIZED}))
-                                await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.UNAUTHORIZED, True)
+                                await _call_registered_function(self.__registered_events, "on_client_error", websocket, json_req, ClientErrorMessage.UNAUTHORIZED, True)
                                 return
                             
                             else:
@@ -1350,7 +1350,7 @@ class Server(Base):
                                 _server_auth_queue.pop(websocket)
                         
                         if register_user:
-                            allowed_to_auth = await _call_registered_function(self.__registered_events, "on_client_auth", json_req)
+                            allowed_to_auth = await _call_registered_function(self.__registered_events, "on_client_auth", websocket, json_req)
 
                             if not (allowed_to_auth == None or allowed_to_auth == True):
                                 if allowed_to_auth != False:
@@ -1402,7 +1402,7 @@ class Server(Base):
 
                 elif json_req["request"] == "login":
                     await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.ALREADY_LOGGED_IN}))
-                    await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.ALREADY_LOGGED_IN, True)
+                    await _call_registered_function(self.__registered_events, "on_client_error", websocket, json_req, ClientErrorMessage.ALREADY_LOGGED_IN, True)
                 
                 elif json_req["request"] == "heartbeat":
                     player = self.all_players[websocket]

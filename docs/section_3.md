@@ -25,20 +25,22 @@ Called when the WebSocket server is ready to operate.
 ## ```Server.on_api_server_ready()```
 Called when the API server is ready to operate.
 
-## ```Server.on_client_auth(json_obj)```
+## ```Server.on_client_auth(websocket, json_obj)```
 Called when a client is authorized.
 
 Arguments:
+- **websocket (websockets.ServerConnection):** Client websocket.
 - **json_obj (dict):** Client JSON object that was provided to the server.
 
 Returns:
 > bool | str: *Optional.* Whether the player should connect to the server. String is reason for disconnecting the player. If this is provided, the player will be disconnected.
 
-## ```Server.on_client_error(websocket, error, is_kicked)```
+## ```Server.on_client_error(websocket, json_req, error, is_kicked)```
 Called when a client connection error occurs.
 
 Arguments:
 - **websocket (websockets.ServerConnection):** Client websocket.
+- **json_obj (dict):** Client JSON object that was provided to the server.
 - **error (ClientErrorMessage):** Connection error.
 - **is_kicked (bool):** Whether the client was kicked from the server.
 

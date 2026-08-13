@@ -9,6 +9,7 @@ v1.2 (client: v1.7)
 - Added method `Player.kick()`.
 - Added more badges to the `Badge` class.
 - Changed event function `on_player_chat`: added `was_sent` parameter.
+- Changed event function `on_client_error`: added `json_req` parameter.
 - Changed default port from 24588 to 8765.
 
 Misc:
