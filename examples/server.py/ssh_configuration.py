@@ -1,6 +1,6 @@
 # This example file shows how to set up a secure (encrypted) connection to a server.
 # This can also be done via Nginx, which you can use to set up a reverse proxy that will handle the encrypted connection for you.
-# It's recommended to set this up, because clients send their login credentials every time they connect to your server.
+# It's recommended to set this up if your server requires players to log in with an account (your server doesn't allow guests).
 
 # If you want to set up secured connection, you can:
 # 1. Use Nginx

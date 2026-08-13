@@ -7,7 +7,7 @@ chatbot = server.create_chatbot(badges=[Badge.VERIFIED], nickname_color=Nickname
 
 # Makes a bot that sends "pong!" when someone sends "/ping".
 @server.event
-async def on_player_chat(player: Player, message: Message):
+async def on_player_chat(player: Player, message: Message, was_sent: bool):
     if message.content == "/ping":
         await chatbot.send_message(player.node, "pong!")
 

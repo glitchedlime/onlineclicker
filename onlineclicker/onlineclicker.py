@@ -27,6 +27,7 @@ from flask_cors import CORS
 from jsonschema import validate
 from colorama import Fore, Back
 from dotenv import load_dotenv
+from random import randint
 from enum import Enum
 import os
 import ssl
@@ -54,8 +55,10 @@ if _docs_path.exists():
             __doc__ += file.read_text(encoding="utf-8")
 
 _testing = False # don't mind this :p
+_max_color_number = 6
 _chat_ratelimit: dict[websockets.ServerConnection, datetime.datetime] = {}
 _missed_hearbeat: dict[websockets.ServerConnection, int] = {}
+_server_auth_queue: dict[websockets.ServerConnection, dict[str, str]] = {} # dict = username, password
 
 Path("./logs").mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
@@ -94,12 +97,14 @@ def get_ini_value(section: str, variable: str, _type=None) -> Any | None:
         return None
 
 #_DB_TYPE = get_ini_value("Global", "DB_TYPE") if get_ini_value("Global", "DB_TYPE") != None else "SQLite3"
+_MASTER_SERVER = "ws://localhost:25000" if _testing else "ws://onlineclicker-master.duckdns.org:25000"
 _PLAYERS_COLUMN = "test_players" if _testing else "players" # don't mind this - testing purposes
 _CLIENT_VERSION = "1.7" # this is a mod client version
 _SERVER_VERSION = "1.2"
 _PORT = get_ini_value("Server", "PORT", int) if get_ini_value("Server", "PORT", int) != None else 8765
-_TCP_PORT = get_ini_value("Server", "TCP_PORT", int) if get_ini_value("Server", "TCP_PORT", int) != None else 8888
+_API_PORT = 8888
 _WS_URL = get_ini_value("Server", "WS_URL")
+_WEB = get_ini_value("Server", "WEB")
 _SERVER_NAME = get_ini_value("Server", "SERVER_NAME") if get_ini_value("Server", "SERVER_NAME") != None else "OnlineClicker Server"
 _SERVER_PASSWORD = get_ini_value("Server", "SERVER_PASSWORD")
 _GUESTS = get_ini_value("Server", "GUESTS", bool) if get_ini_value("Server", "GUESTS", bool) != None else False
@@ -111,7 +116,7 @@ _NODE_LIMIT = get_ini_value("Server", "MAX_IN_LOBBY", int)
 _MAX_PLAYERS = get_ini_value("Server", "MAX_PLAYERS", int)
 _LOG_MESSAGES = get_ini_value("Server", "LOG_MESSAGES", bool)
 _CHATBOT_USERNAMES = [chatbot.strip() for chatbot in get_ini_value("Global", "CHATBOT_USERNAMES").split(',')] if get_ini_value("Global", "CHATBOT_USERNAMES") != None else []
-_PRIVATE = get_ini_value("Server", "PRIVATE", bool) if get_ini_value("Server", "PRIVATE", bool) != None else True
+_PRIVATE = get_ini_value("Server", "PRIVATE", bool) if get_ini_value("Server", "PRIVATE", bool) != None else False
 _LOCALHOST = get_ini_value("Server", "LOCALHOST", bool) if get_ini_value("Server", "LOCALHOST", bool) != None else False
 
 _profanity_filter = no_profanity.ProfanityFilter()
@@ -305,9 +310,21 @@ class Badge(Enum):
     MODERATOR: int = 1
     """This attribute has a value of 1. It represents a green shield badge."""
     VERIFIED: int = 2
-    """This attribute has a value of 2. It represents a badge with a purple checkmark."""
+    """This attribute has a value of 2. It represents a purple badge with a white checkmark."""
     SUPPORTER: int = 3
     """This attribute has a value of 3. It represents a purple heart badge."""
+    LEVEL_5: int = 4
+    """This attribute has a value of 4. It represents a blue level 5 badge."""
+    LEVEL_10: int = 5
+    """This attribute has a value of 5. It represents an orange level 10 badge."""
+    LEVEL_20: int = 6
+    """This attribute has a value of 6. It represents a green level 20 badge."""
+    LEVEL_30: int = 7
+    """This attribute has a value of 7. It represents a bronze level 30 badge."""
+    LEVEL_40: int = 8
+    """This attribute has a value of 8. It represents a silver level 40 badge."""
+    LEVEL_50: int = 9
+    """This attribute has a value of 9. It represents a gold level 50 badge."""
 
 class NicknameColor(Enum):
     """A class representing a nickname color. This class is an enumeration."""
@@ -340,6 +357,10 @@ class ClientErrorMessage(str, Enum):
     """Represents an "outdated client" exception."""
     ALREADY_LOGGED_IN: str = "You're already logged in to the server."
     """Represents an "already logged in" exception."""
+    INVALID_USERNAME: str = "Your username must be alphanumeric (must contain only letters and numbers). Dashes (-), dots (.) and underscores (_) <b><strong>are allowed</strong></b>! Also, the username musn't be a chatbot username!"
+    """Represents an "invalid username" exception."""
+    UNAUTHORIZED: str = "Unauthorized."
+    """Represents an "unauthorized" error."""
 
 class PlayerStatistics:
     """A class representing player statistics."""
@@ -698,6 +719,15 @@ class Player(SafePlayer):
                  self.status,
                  self.nickname_color,
                  self.statistics)
+    
+    async def kick(self, reason: str = None):
+        """Kicks a player from the server.
+        
+        Parameters:
+            reason (str): *Optional.* Reason for kicking the player. This will make a kick notification with this reason stated.
+        """
+
+        await self._server.kick_player_by_websocket(self.websocket, reason)
 
     async def move(self, position: PlayerPosition, flip: bool = None) -> None:
         """Moves the player to a specific position. This method is a coroutine.
@@ -767,8 +797,8 @@ class Server(Base):
                  password: str = _SERVER_PASSWORD,
                  guests: bool = _GUESTS,
                  port: int = _PORT,
-                 tcp_port: int = _TCP_PORT,
                  ws_url: str = _WS_URL,
+                 web: str = _WEB,
                  node_limit: int = _NODE_LIMIT,
                  max_players: int = _MAX_PLAYERS,
                  log_messages: bool = _LOG_MESSAGES,
@@ -781,12 +811,12 @@ class Server(Base):
                  ):
         """
         Parameters:
-            name (str): Server name.
+            name (str): Server name. In server browser, this value is capped at 70 characters.
             password (str): Server password. (This is mostly useful only if you have a server that allows guests (players with no accounts).)
             guests (bool): Whether the server should allow guests (players with no accounts).
             port (int): The port on which the server is running.
-            tcp_port (int): The port on which the TCP server is running. (This server is used to send server info to players.)
             ws_url (str): WebSocket URL of the server for players to connect to. This must be set if your server is public.
+            web (str): Website of the server. This should preferably be a Discord server where users can create an account using the Discord bot that runs along with the server, but it's up to you.
             node_limit (int): The maximum number of players who can play on one node.
             max_players (int): The maximum number of players that can be connected to the server.
             log_messages (bool): Whether player messages should be logged to DB.
@@ -794,7 +824,7 @@ class Server(Base):
             moderators (list[int | str]): List of server moderators' identificators (Discord user ID or in-game username).
             supporters (list[int | str]): List of server supporters' identificators (Discord user ID or in-game username).
             verified (list[int | str]): List of server verified players' identificators (Discord user ID or in-game username).
-            private (bool): Whether the server should be private.
+            private (bool): Whether the server shouldn't appear in the server browser.
             localhost (bool): Whether the server should run on localhost.
         """
         
@@ -802,8 +832,8 @@ class Server(Base):
         self._password: str = password
         self._guests: bool = guests
         self._port: int = port
-        self._tcp_port: int = tcp_port
         self._ws_url: str = ws_url
+        self._web: str = web
         self._node_limit: int = node_limit
         self._max_players: int = max_players
         self._log_messages: bool = log_messages
@@ -823,11 +853,11 @@ class Server(Base):
 
     @property
     def name(self) -> str:
-        """Server name."""
+        """Server name. In server browser, this value is capped at 70 characters."""
         return self._name
     @property
     def password(self) -> str:
-        """Server password."""
+        """Server password. (This is mostly useful only if you have a server that allows guests (players with no accounts).)"""
         return self._password
     @property
     def guests(self) -> bool:
@@ -838,13 +868,17 @@ class Server(Base):
         """The port on which the server is running."""
         return self._port
     @property
-    def tcp_port(self) -> int:
-        """The port on which the TCP server is running. (This server is used to send server info to players.)"""
-        return self._tcp_port
+    def api_port(self) -> int:
+        """The port on which the API server is running. This **must** be `8888`, otherwise your server won't appear in the server browser."""
+        return _API_PORT
     @property
     def ws_url(self) -> str:
         """WebSocket URL of the server for players to connect to. This must be set if your server is public."""
         return self._ws_url
+    @property
+    def web(self) -> str:
+        """Website of the server. This should preferably be a Discord server where users can create an account using the Discord bot that runs along with the server, but it's up to you."""
+        return self._web
     @property
     def node_limit(self) -> int:
         """The maximum number of players who can play on one node."""
@@ -887,7 +921,7 @@ class Server(Base):
         return self._chatbot_usernames
     @property
     def private(self) -> bool:
-        """Whether the server should be private."""
+        """Whether the server shouldn't appear in the server browser."""
         return self._private
     @property
     def localhost(self) -> bool:
@@ -907,7 +941,7 @@ class Server(Base):
         else:
             os.system('clear')
 
-        print(Fore.CYAN + self.name + " (v" + _SERVER_VERSION + ") (client: v" + _CLIENT_VERSION + ")" + Fore.BLACK + Back.WHITE + "\nServer logs can be found in the \"logs/terminal_out.log\" file!" + Back.BLUE + "\nIf you have any questions, join our Discord: https://discord.gg/StJxMSc8kM" + Fore.RESET + Back.RESET)
+        print(Fore.CYAN + self.name + " (v" + _SERVER_VERSION + ") (client: v" + _CLIENT_VERSION + ")" + Fore.BLACK + Back.WHITE + "\nServer logs can be found in the \"logs/terminal_out.log\" file!" + Fore.WHITE + Back.BLUE + "\nIf you have any questions, join our Discord: https://discord.gg/StJxMSc8kM" + Fore.RESET + Back.RESET)
         asyncio.run(self.__main(discord_bot, ssl_chain))
 
     def create_chatbot(self, username_index: str = 0, badges: list[Badge] = [], nickname_color: NicknameColor = NicknameColor.RED) -> ChatBot:
@@ -1123,17 +1157,19 @@ class Server(Base):
     # Check heartbeats, logins and do other stuff
     async def __validate_players(self):
         while True:
-            accounts = await execDB(f"SELECT username, password FROM {_PLAYERS_COLUMN}")
+            if not self.guests:
+                accounts = await execDB(f"SELECT username, password FROM {_PLAYERS_COLUMN}")
 
-            if len(accounts) != 0:
-                accounts = {row[0]: row[1] for row in accounts}
+                if len(accounts) != 0:
+                    accounts = {row[0]: row[1] for row in accounts}
 
-            accounts_keys = accounts.keys()
+                accounts_keys = accounts.keys()
+            
             now = datetime.datetime.now()
 
             for websocket, player in self.all_players.copy().items():
                 try:
-                    if not (player.username in accounts_keys and player.password == accounts[player.username]):
+                    if not self.guests and not (player.username in accounts_keys and player.password == accounts[player.username]):
                         await self.kick_player_by_websocket(websocket, "Your account has been changed. Please log in again.")
 
                     else:
@@ -1195,24 +1231,48 @@ class Server(Base):
         CORS(flask_server)
 
         def run_flask():
-            flask_server.run("0.0.0.0", self.tcp_port, use_reloader=False)
+            flask_server.run("0.0.0.0", self.api_port, use_reloader=False)
 
         @flask_server.route("/fetch_info")
         def fetch_info():
             return jsonify({
                 "name": self.name,
+                "ws_url": self.ws_url,
+                "guests": self.guests,
+                "password_protected": self.password != None,
                 "players": len(self.all_players),
                 "max_players": self.max_players,
-                "ws_url": self.ws_url,
-                "password_protected": self.password
+                "web": self.web,
+                "client_version": _CLIENT_VERSION
             })
         
         if not self.private:
-            flash_thread = threading.Thread(target=run_flask, daemon=True)
-            flash_thread.start()
+            flask_thread = threading.Thread(target=run_flask, daemon=True)
+            flask_thread.start()
+            await _call_registered_function(self.__registered_events, "on_api_server_ready")
+
+        if not self.localhost and not self.private:
+            async def indexing_connection():
+                while True:
+                    try:
+                        async with websockets.connect(_MASTER_SERVER) as connection:
+                            await connection.send(json.dumps({"request": "index_server", "ws_url": self.ws_url}))
+                            await connection.keepalive()
+
+                    except Exception:
+                        pass
+
+                    await asyncio.sleep(10)
+
+            def run_indexing():
+                asyncio.run(indexing_connection())
+
+            indexing_thread = threading.Thread(target=run_indexing, daemon=True)
+            indexing_thread.start()
 
         ws_server = await websockets.serve(self.__handle_client, "localhost" if _testing or self.localhost else "0.0.0.0", self.port, ssl=ssl_context if ssl_chain != None else None)
         await _call_registered_function(self.__registered_events, "on_server_ready")
+        await _call_registered_function(self.__registered_events, "on_ws_server_ready")
 
         if discord_bot:
             await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
@@ -1228,36 +1288,75 @@ class Server(Base):
                     #print(json_req)
 
                 if "request" not in json_req:
-                    await websocket.send(json.dumps({"status_code": 400, "message": ClientErrorMessage.MISSING_REQ_VALUE}))
+                    await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.MISSING_REQ_VALUE}))
                     await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.MISSING_REQ_VALUE, False)
 
                 elif websocket not in self.all_players:
-                    # Join to a free node after logging in
+                    # Join to a free node after logging in (or send server password auth)
 
                     if self.max_players != None and len(self.all_players) >= self.max_players:
-                        await websocket.send(json.dumps({"status_code": 400, "message": ClientErrorMessage.FULL_SERVER}))
+                        await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.FULL_SERVER}))
                         await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.FULL_SERVER, True)
                         return
                     
-                    if not json_req["request"] == "login":
-                        await websocket.send(json.dumps({"reply": "login", "status_code": 400, "message": ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD}))
+                    if not self.guests and not json_req["request"] == "login":
+                        await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD}))
                         await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD, True)
                         return
                     
                     else:
-                        values = await execDB(f"SELECT password, discord_id, username FROM {_PLAYERS_COLUMN} WHERE LOWER(username)=?", (json_req["username"].lower(), ))
+                        if websocket in _server_auth_queue:
+                            json_req.update(_server_auth_queue[websocket])
 
-                        if not (len(values) != 0 and _check_hash(json_req["password"], values[0][0].encode("utf-8"))):
-                            await websocket.send(json.dumps({"reply": "login", "status_code": 400, "message": ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD}))
-                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD, True)
+                        if not (json_req["username"].replace(".", "").replace("-", "").replace("_", "").isalnum() and json_req["username"].lower() not in [x.lower() for x in self.chatbot_usernames]):
+                            await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.INVALID_USERNAME}))
+                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.INVALID_USERNAME, True)
                             return
-                        
-                        elif json_req["version"] != _CLIENT_VERSION:
-                            await websocket.send(json.dumps({"reply": "login", "status_code": 400, "message": ClientErrorMessage.OUTDATED_CLIENT}))
+
+                        register_user = True
+                        values = ((None, None, json_req["username"]),)
+
+                        if not self.guests:
+                            values = await execDB(f"SELECT password, discord_id, username FROM {_PLAYERS_COLUMN} WHERE LOWER(username)=?", (json_req["username"].lower(), ))
+
+                        if json_req["version"] != _CLIENT_VERSION:
+                            await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.OUTDATED_CLIENT}))
                             await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.OUTDATED_CLIENT, True)
                             return
                         
-                        else:
+                        elif self.guests:
+                            pass
+                        
+                        elif websocket not in _server_auth_queue and not (len(values) != 0 and _check_hash(json_req["password"], values[0][0].encode("utf-8"))):
+                            await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD}))
+                            await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.WRONG_USERNAME_OR_PASSWORD, True)
+                            return
+                        
+                        if self.password and websocket not in _server_auth_queue:
+                            await websocket.send(json.dumps({"reply": "auth"}))
+                            json_req.pop("request")
+                            _server_auth_queue[websocket] = json_req
+                            register_user = False
+
+                        elif self.password and websocket in _server_auth_queue:
+                            if not ("server_pass" in json_req and json_req["server_pass"] == self.password):
+                                await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.UNAUTHORIZED}))
+                                await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.UNAUTHORIZED, True)
+                                return
+                            
+                            else:
+                                json_req["username"] = _server_auth_queue[websocket]["username"]
+                                json_req["password"] = _server_auth_queue[websocket]["password"]
+                                _server_auth_queue.pop(websocket)
+                        
+                        if register_user:
+                            allowed_to_auth = await _call_registered_function(self.__registered_events, "on_client_auth", json_req)
+
+                            if not (allowed_to_auth == None or allowed_to_auth == True):
+                                if allowed_to_auth != False:
+                                    await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": allowed_to_auth}))
+                                return
+
                             validate(json_req["statistics"], _valid_statistics_schema)
 
                             json_req["username"] = values[0][2]
@@ -1282,7 +1381,10 @@ class Server(Base):
                                 await _call_registered_function(self.__registered_events, "on_player_reconnect", last_connection, old_websocket)
 
                             else:
-                                nickname_color = await execDB(f"SELECT nickname_color FROM {_PLAYERS_COLUMN} WHERE LOWER(username)=?", (json_req["username"].lower(), ))
+                                if self.guests:
+                                    nickname_color = ((randint(0, _max_color_number),),)
+                                else:
+                                    nickname_color = await execDB(f"SELECT nickname_color FROM {_PLAYERS_COLUMN} WHERE LOWER(username)=?", (json_req["username"].lower(), ))
                                 json_req["nickname_color"] = nickname_color[0][0]
                                 allowed_to_connect = await _call_registered_function(self.__registered_events, "on_process_player_connect", json_req)
 
@@ -1299,7 +1401,7 @@ class Server(Base):
                                     return
 
                 elif json_req["request"] == "login":
-                    await websocket.send(json.dumps({"reply": "login", "status_code": 400, "message": ClientErrorMessage.ALREADY_LOGGED_IN}))
+                    await websocket.send(json.dumps({"reply": "error", "status_code": 400, "message": ClientErrorMessage.ALREADY_LOGGED_IN}))
                     await _call_registered_function(self.__registered_events, "on_client_error", websocket, ClientErrorMessage.ALREADY_LOGGED_IN, True)
                 
                 elif json_req["request"] == "heartbeat":
@@ -1361,7 +1463,8 @@ class Server(Base):
 
                         if allowed_to_send == None or allowed_to_send:
                             await self.send_message(player.node, message, log_message=True)
-                            await _call_registered_function(self.__registered_events, "on_player_chat", player, message)
+                        
+                        await _call_registered_function(self.__registered_events, "on_player_chat", player, message, allowed_to_send)
                         
                         _chat_ratelimit[websocket] = datetime.datetime.now()
 
@@ -1406,6 +1509,7 @@ class Server(Base):
                     self.nodes[player.node].remove(username)
                     self.all_players.pop(websocket)
                     _chat_ratelimit.pop(websocket, None)
+                    _server_auth_queue.pop(websocket, None)
 
                     if websocket in _missed_hearbeat:
                         del _missed_hearbeat[websocket]

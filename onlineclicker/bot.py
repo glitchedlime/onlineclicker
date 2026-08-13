@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 # https://discord.gg/StJxMSc8kM
 
-testing = False
+testing = True
 players_column = "test_players" if testing else "players"
 colors = (["Red", "🟥"], ["Orange", "🟧"], ["Yellow", "🟨"], ["Green", "🟩"], ["Blue", "🟦"], ["Purple", "🟪"], ["Brown", "🟫"])
 

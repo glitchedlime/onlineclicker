@@ -8,8 +8,8 @@ from onlineclicker.onlineclicker import *
 server = Server()
 
 @server.event
-async def on_server_ready():
-    print("This will be printed when the server is ready to operate.")
+async def on_ws_server_ready():
+    print("This will be printed when the WebSocket server is ready to operate.")
 
 @server.event
 async def on_player_connect(player: Player):
@@ -18,16 +18,38 @@ async def on_player_connect(player: Player):
 server.initialize()
 ```
 
+## ```Server.on_ws_server_ready()```
 ## ```Server.on_server_ready()```
-Called when the server is ready to operate.
+Called when the WebSocket server is ready to operate.
 
-## ```Server.on_client_error(websocket, error, is_kicked)```
-Called when a player connection error occurs.
+## ```Server.on_api_server_ready()```
+Called when the API server is ready to operate.
+
+## ```Server.on_client_auth(json_obj)```
+Called when a client is authorized.
 
 Arguments:
-- **websocket (websockets.ServerConnection):** Player websocket.
+- **json_obj (dict):** Client JSON object that was provided to the server.
+
+Returns:
+> bool | str: *Optional.* Whether the player should connect to the server. String is reason for disconnecting the player. If this is provided, the player will be disconnected.
+
+## ```Server.on_client_error(websocket, error, is_kicked)```
+Called when a client connection error occurs.
+
+Arguments:
+- **websocket (websockets.ServerConnection):** Client websocket.
 - **error (ClientErrorMessage):** Connection error.
-- **is_kicked (bool):** Whether the player was kicked from the server.
+- **is_kicked (bool):** Whether the client was kicked from the server.
+
+## ```Server.on_process_player_connect(json_obj)```
+Called before a player connects to the server.
+
+Arguments:
+- **json_obj (dict):** Player JSON object that was provided to the server.
+
+Returns:
+> bool | str: *Optional.* Whether the player should connect to the server. String is reason for disconnecting the player. If this is provided, the player will be disconnected.
 
 ## ```Server.on_player_connect(player)```
 ## ```Server.on_player_disconnect(player)```
@@ -41,7 +63,7 @@ Called when a player reconnects to the server.
 
 Arguments:
 - **player (Player):** The reconnected player.
-- **old_websocket (websockets.ServerConnection):** Websocket of the old player connection.
+- **old_websocket (websockets.ServerConnection):** WebSocket object of the old player connection.
 
 ## ```Server.on_player_heartbeat_update(player, old_heartbeat, new_heartbeat)```
 Called when a player updates their heartbeat.
@@ -71,12 +93,13 @@ Returns (1. function):
 > bool: *Optional.* Whether the player should move.
 
 ## ```Server.on_process_player_chat(player, message)```
-## ```Server.on_player_chat(player, message)```
+## ```Server.on_player_chat(player, message, was_sent)```
 The first function is called before and the second one after processing a player chat.
 
 Arguments:
 - **player (Player):** The player who requested to send a message.
 - **message (Message):** Object of the requested message.
+- **was_sent (bool):** Whether the player message appeared in chat.
 
 Returns (1. function):
 > bool: *Optional.* Whether the message should be sent.

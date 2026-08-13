@@ -1,4 +1,15 @@
 v1.2 (client: v1.7)
-- Added more server attributes (`Server.password`, `Server.guests`, `Server.tcp_port`, `Server.ws_url`, `Server.private`).
-- Added more configuration variables (`[Server] SERVER_PASSWORD`, `[Server] GUESTS`, `[Server] TCP_PORT`, `[Server] WS_URL`, `[Server] PRIVATE`).
-- Updated `Server.initialze()`: added `tcp_server` parameter.
+- Server is automatically indexed to OnlineClicker search system.
+- Added more server attributes (`Server.password`, `Server.guests`, `Server.api_port`, `Server.ws_url`, `Server.private`, `Server.web`).
+- Added more configuration variables (`[Server] SERVER_PASSWORD`, `[Server] GUESTS`, `[Server] WS_URL`, `[Server] PRIVATE`, `[Server] WEB`).
+- Added an API server for sending server info to the OnlineClicker search system (and maybe more in the future).
+- Added executable scripts `update_server_git.bat` and `update_server_git.sh`.
+- Added `ClientErrorMessage.INVALID_USERNAME` attribute.
+- Added more event functions: `on_ws_server_ready()`, `on_api_server_ready()`, `on_client_auth()`.
+- Added method `Player.kick()`.
+- Added more badges to the `Badge` class.
+- Changed event function `on_player_chat`: added `was_sent` parameter.
+- Changed default port from 24588 to 8765.
+
+Misc:
+- Edited MOTD banner that shows up when you start the server.

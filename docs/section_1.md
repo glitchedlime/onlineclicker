@@ -42,7 +42,7 @@ To install the server using Git (Windows):
 2. In the file explorer, type `cmd` in the path bar (next to the search bar) and press ENTER. This will open a terminal.
 3. Download (clone) the server using this command: `git clone https://github.com/glitchedlime/onlineclicker.git`.
 
-That's it! And if you want to update the server (this is the part where Git is very useful), just run `update_server_git.bat` or `update_server_git.sh`.
+That's it! And if you want to update the server (this is the part where Git is very useful), just run `update_server_git.bat` (Windows) or `update_server_git.sh` (Linux).
 
 ### Manual download (Not recommended)
 You can download the latest version of the server by going to the [GitHub page of OnlineClicker](https://github.com/glitchedlime/onlineclicker), clicking the green "Code" button and downloading the ZIP file.
@@ -75,4 +75,52 @@ All the values ​​you can edit are already in the files and you can overwrite
 ## Running the server
 On Windows, you can execute the script by double-clicking the `start.bat` file.
 On Linux, you can execute the script by opening the terminal in the server directory and typing `bash ./start.sh`.
+
+## Setting up SSL (Optional)
+This is only recommended if you have a public server that requires players to have their own account. SSL is a protocol that secures connections between your server and players. There are multiple options to set it up. **This guide is only for Linux, because certbot has been discontinued for Windows in 2024.**
+
+### Domain
+If you want to set up SSL, you have to own a domain. You can use [DuckDNS](https://duckdns.org) to make one!
+
+### Nginx (Option 1)
+To set up Nginx (Linux):
+1. Open your terminal and type this command to install all important packages: `sudo apt install nginx certbot python3-certbot-nginx`.
+2. Make a configuration file for your domain: `sudo nano /etc/nginx/sites-available/<your-subdomain>.duckdns.org`
+3. Paste this text (replace `<your-subdomain>` and `<PORT>` with proper values!) and save the file:
+```
+server {
+    listen 80;
+    server_name <your-subdomain>.duckdns.org;
+
+    location / {
+        proxy_pass http://127.0.0.1:<PORT>;
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+4. Make a link of this file to the `sites-enabled/` folder: `sudo ln -s /etc/nginx/sites-available/<your-subdomain>.duckdns.org /etc/nginx/sites-enabled/`.
+5. Run `sudo nginx -t` to make sure everything is set up correctly.
+6. Run `sudo systemctl reload nginx` to apply changes and restart the server.
+7. Set up certbot by running this command: `sudo certbot --nginx -d <your-subdomain>.duckdns.org`.
+8. You will be asked to type in your email and accept the terms. Do all of that and the SSL protocol should be functional!
+
+### Assigning SSL certificates (Option 2)
+Another option is to directly assign SSL certificates to your server.
+Follow these steps (Linux):
+1. Install certbot by running this command in your terminal: `sudo apt install certbot`.
+2. In the `server.py` script, change your `server.initialize()` line to this: `server.initialize(ssl_chain=["custom/fullchain.pem", "custom/privkey.pem"])`.
+3. In your terminal, run this command: `sudo certbot certonly --standalone -d <your-subdomain>.duckdns.org --pre-hook "pkill -f python3" --post-hook "cp -L /etc/letsencrypt/live/<your-subdomain>.duckdns.org/{fullchain,privkey}.pem /path/to/server/custom && bash /path/to/start.sh &"`. This will ensure that once a new certificate is auto-generated, your server will be restarted. (If this command doesn't work, please let me know!)
+
+Much better option is the first one with Nginx, but this is a way, too.
+
+### Important note
+Once your server uses SSL, the WebSocket URL of the server doesn't start with `ws://` anymore. Use `wss://` (the additional "s" means "secured") in your WebSocket URL to connect to the server!
 

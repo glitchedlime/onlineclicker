@@ -1,4 +1,6 @@
 # Configuring Discord bot
+**Discord bot is only required for account creating. If your servers allows guests (you can set this in the `config.ini` file) or you have other account creation method, you don't need to make a Discord bot!**
+
 The Discord bot is needed to create accounts with which players will connect to your server. There is no other system for creating accounts (e.g. emails) yet, but maybe that will change in the future. :)
 
 ## Creating a bot
@@ -22,6 +24,9 @@ And one last thing:
 2. **In the "Bot" section, uncheck "Public Bot". Your bot should be private!**
 
 And now you should have your bot in your server!
+
+# Making the server public
+If you want to make your server public, you need to take a look at `config.ini` and change certain variables. It's important to ensure that players will be able to connect to your server!
 
 # Programming the server
 **If you can't program in Python, you don't have to continue reading this documentation! Your server is ready!**
@@ -63,7 +68,7 @@ chatbot = server.create_chatbot(badges=[Badge.VERIFIED], nickname_color=Nickname
 
 # Makes a bot that sends "pong!" when someone sends "/ping".
 @server.event
-async def on_player_chat(player: Player, message: Message):
+async def on_player_chat(player: Player, message: Message, was_sent: bool):
     if message.content == "/ping":
         await chatbot.send_message(player.node, "pong!")
 

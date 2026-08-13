@@ -26,7 +26,7 @@ cookiebot = server.create_chatbot(username_index=1) # CookieBot
 
 # Or if the message has "/online" or "/idle" in it, it will change player status!
 @server.event
-async def on_player_chat(player: Player, message: Message):
+async def on_player_chat(player: Player, message: Message, was_sent: bool):
     if message.content == "/ping":
         await grandmabot.send_message(player.node, "Pong!")
 
