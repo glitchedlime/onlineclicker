@@ -1222,10 +1222,6 @@ class Server(Base):
             )
 
         flask_server = Flask(__name__)
-
-        log = logging.getLogger("werkzeug")
-        log.setLevel(logging.ERROR)
-
         CORS(flask_server)
 
         def run_flask():
