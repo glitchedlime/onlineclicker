@@ -935,13 +935,7 @@ class Server(Base):
             discord_bot (bool): *Optional.* Whether the Discord bot should be launched.
             ssl_chain (list[str]): *Optional.* SSL certification chain. This is a list that contains a path to your certificate (index 0) and a path to your private key (index 1).
         """
-
-        if os.name == 'nt':
-            os.system('cls')
-        else:
-            os.system('clear')
-
-        print(Fore.CYAN + self.name + " (v" + _SERVER_VERSION + ") (client: v" + _CLIENT_VERSION + ")" + Fore.BLACK + Back.WHITE + "\nServer logs can be found in the \"logs/terminal_out.log\" file!" + Fore.WHITE + Back.BLUE + "\nIf you have any questions, join our Discord: https://discord.gg/StJxMSc8kM" + Fore.RESET + Back.RESET)
+        
         asyncio.run(self.__main(discord_bot, ssl_chain))
 
     def create_chatbot(self, username_index: str = 0, badges: list[Badge] = [], nickname_color: NicknameColor = NicknameColor.RED) -> ChatBot:
@@ -1228,10 +1222,14 @@ class Server(Base):
             )
 
         flask_server = Flask(__name__)
+
+        log = logging.getLogger("werkzeug")
+        log.setLevel(logging.ERROR)
+
         CORS(flask_server)
 
         def run_flask():
-            flask_server.run("0.0.0.0", self.api_port, use_reloader=False)
+            flask_server.run("0.0.0.0", self.api_port, use_reloader=False, debug=False)
 
         @flask_server.route("/fetch_info")
         def fetch_info():
@@ -1249,6 +1247,15 @@ class Server(Base):
         if not self.private:
             flask_thread = threading.Thread(target=run_flask, daemon=True)
             flask_thread.start()
+
+        if os.name == 'nt':
+            os.system('cls')
+        else:
+            os.system('clear')
+
+        print(Fore.CYAN + self.name + " (v" + _SERVER_VERSION + ") (client: v" + _CLIENT_VERSION + ")" + Fore.BLACK + Back.WHITE + "\nServer logs can be found in the \"logs/terminal_out.log\" file!" + Fore.WHITE + Back.BLUE + "\nIf you have any questions, join our Discord: https://discord.gg/StJxMSc8kM" + Fore.RESET + Back.RESET)
+
+        if not self.private:
             await _call_registered_function(self.__registered_events, "on_api_server_ready")
 
         if not self.localhost and not self.private:
