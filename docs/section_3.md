@@ -44,10 +44,11 @@ Arguments:
 - **error (ClientErrorMessage):** Connection error.
 - **is_kicked (bool):** Whether the client was kicked from the server.
 
-## ```Server.on_process_player_connect(json_obj)```
+## ```Server.on_process_player_connect(websocket, json_obj)```
 Called before a player connects to the server.
 
 Arguments:
+- **websocket (websockets.ServerConnection):** Player websocket.
 - **json_obj (dict):** Player JSON object that was provided to the server.
 
 Returns:

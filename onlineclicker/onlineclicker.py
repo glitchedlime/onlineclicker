@@ -1389,7 +1389,7 @@ class Server(Base):
                                 else:
                                     nickname_color = await execDB(f"SELECT nickname_color FROM {_PLAYERS_COLUMN} WHERE LOWER(username)=?", (json_req["username"].lower(), ))
                                 json_req["nickname_color"] = nickname_color[0][0]
-                                allowed_to_connect = await _call_registered_function(self.__registered_events, "on_process_player_connect", json_req)
+                                allowed_to_connect = await _call_registered_function(self.__registered_events, "on_process_player_connect", websocket, json_req)
 
                                 if allowed_to_connect == None or allowed_to_connect == True:
                                     node = self.__assign_to_node(websocket, json_req, values[0][1])
