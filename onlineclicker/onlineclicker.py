@@ -100,7 +100,7 @@ def get_ini_value(section: str, variable: str, _type=None) -> Any | None:
 _MASTER_SERVER = "ws://localhost:25000" if _testing else "ws://onlineclicker-master.duckdns.org:25000"
 _PLAYERS_COLUMN = "test_players" if _testing else "players" # don't mind this - testing purposes
 _CLIENT_VERSION = "1.7" # this is a mod client version
-_SERVER_VERSION = "1.2"
+_SERVER_VERSION = "1.2.1"
 _PORT = get_ini_value("Server", "PORT", int) if get_ini_value("Server", "PORT", int) != None else 8765
 _API_PORT = 8888
 _WS_URL = get_ini_value("Server", "WS_URL")
