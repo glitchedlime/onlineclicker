@@ -14,3 +14,6 @@ v1.2 (client: v1.7)
 
 Misc:
 - Edited MOTD banner that shows up when you start the server.
+
+v1.2.1
+- Changed event function `on_process_player_connect`: added `websocket` parameter.
